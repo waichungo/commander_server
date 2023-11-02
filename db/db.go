@@ -37,9 +37,10 @@ func ExecuteOnDB(execute func(db *gorm.DB) error) error {
 	}
 	return err
 }
-func MigrateModels() {
+func MigrateModels() error {
+	var err error
 	ExecuteOnDB(func(db *gorm.DB) error {
-		var err = db.AutoMigrate(&models.Client{})
+		err = db.AutoMigrate(&models.Client{})
 		if err == nil {
 			err = db.AutoMigrate(&models.Runtime{})
 		}
@@ -47,7 +48,7 @@ func MigrateModels() {
 			err = db.AutoMigrate(&models.Task{})
 		}
 		if err == nil {
-			err = db.AutoMigrate(&models.Group{})
+			err = db.AutoMigrate(&models.Client{})
 		}
 		if err == nil {
 			err = db.AutoMigrate(&models.GroupToClient{})
@@ -61,9 +62,16 @@ func MigrateModels() {
 		if err == nil {
 			err = db.AutoMigrate(&models.ClientProfile{})
 		}
+		if err == nil {
+			err = db.AutoMigrate(&models.User{})
+		}
+		// if err == nil {
+		// 	err = db.AutoMigrate(&models.Admin{})
+		// }
 		if err != nil {
 			fmt.Println(err)
 		}
 		return err
 	})
+	return err
 }
