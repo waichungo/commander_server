@@ -13,7 +13,9 @@ import (
 
 func GetConn() (*gorm.DB, error) {
 	// db, err := gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
-	const conString = "postgres://postgres:jkuat123@localhost:5432/collector"
+	const pass = "xK3T6_IZrslf33evG_XQIA"
+	var conString = fmt.Sprintf("postgresql://guylord:%s@rough-snorter-11358.8nj.gcp-europe-west1.cockroachlabs.cloud:26257/collector?sslmode=verify-full", pass)
+	// const conString = "postgres://postgres:jkuat123@localhost:5432/collector"
 	db, err := gorm.Open(postgres.Open(conString), &gorm.Config{})
 	return db, err
 }
