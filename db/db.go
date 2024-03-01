@@ -13,7 +13,7 @@ import (
 
 func GetConn() (*gorm.DB, error) {
 	// db, err := gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
-	const conString = "postgres://postgres:root@localhost:5432/collector"
+	const conString = "postgres://postgres:jkuat123@localhost:5432/collector"
 	db, err := gorm.Open(postgres.Open(conString), &gorm.Config{})
 	return db, err
 }
@@ -54,7 +54,10 @@ func MigrateModels() error {
 			err = db.AutoMigrate(&models.GroupToClient{})
 		}
 		if err == nil {
-			err = db.AutoMigrate(&models.DownloadProgress{})
+			err = db.AutoMigrate(&models.Download{})
+		}
+		if err == nil {
+			err = db.AutoMigrate(&models.Upload{})
 		}
 		if err == nil {
 			err = db.AutoMigrate(&models.MachineInfo{})

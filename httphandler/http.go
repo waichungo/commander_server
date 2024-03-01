@@ -27,7 +27,7 @@ func (r BodyWriter) Write(b []byte) (int, error) {
 }
 
 type ModelType interface {
-	models.Client | models.ClientProfile | models.DownloadProgress | models.ClientGroup | models.User | models.GroupToClient | models.MachineInfo | models.Runtime | models.Task
+	models.Client | models.ClientProfile | models.Download | models.ClientGroup | models.User | models.GroupToClient | models.MachineInfo | models.Runtime | models.Task
 }
 
 func HandlePing(c *gin.Context) {
@@ -41,7 +41,6 @@ func GzipMiddleware() gin.HandlerFunc {
 		canEncode := false
 
 		canEncode = strings.Contains(strings.ToLower(c.Request.Header.Get("Accept-Encoding")), "gzip")
-		// var writerOriginal *gin.ResponseWriter
 
 		var wb *BodyWriter
 		if canEncode {
@@ -87,7 +86,6 @@ func GetErrorResponseWithMessage(message string) models.JSONResponse {
 	}
 }
 func GetSuccessResponseWithData(data interface{}) models.JSONResponse {
-
 	return models.JSONResponse{
 		Success: true,
 		Data:    data,
@@ -165,12 +163,16 @@ func HandleFind[T ModelType](c *gin.Context, result T) {
 }
 func HandleList[T ModelType](c *gin.Context, instance T, searchableFields []string) {
 
+	var results = []T{}
 	limit := MaxPageSize
 	page := 1
 	total := 0
 	search := ""
 	orderKey := "created_at"
 	orderType := "desc"
+	fromTime := int64(0)
+	ids := []string{}
+	var err error
 
 	limitQ := strings.ToLower(c.Query("limit"))
 	if len(limitQ) > 0 {
@@ -188,6 +190,14 @@ func HandleList[T ModelType](c *gin.Context, instance T, searchableFields []stri
 			}
 		}
 	}
+	timeQ := strings.ToLower(c.Query("fromTime"))
+	if len(timeQ) > 0 {
+		if num, err := strconv.ParseInt(timeQ, 10, 64); err == nil {
+			if num > 0 {
+				fromTime = num
+			}
+		}
+	}
 
 	orderQ := strings.ToLower(c.Query("order"))
 	if len(orderQ) > 0 {
@@ -202,46 +212,67 @@ func HandleList[T ModelType](c *gin.Context, instance T, searchableFields []stri
 			}
 		}
 	}
-	searchQ := strings.ToLower(c.Query("search"))
-	if len(searchQ) > 0 {
-		search = searchQ
-	}
-	var results = []T{}
-	var err error
-	db.ExecuteOnDB(func(db *gorm.DB) error {
-		offset := (page - 1) * limit
-		dbCtx := db.Model(&instance)
 
-		if len(search) > 0 && len(searchableFields) > 0 {
-			var queryStr = ""
-			find := "%" + search + "%"
-			repeatInterface := make([]interface{}, 0, len(searchableFields))
-			for _, field := range searchableFields {
-				q := fmt.Sprintf("lower(%s) LIKE ? ", field)
-				if len(queryStr) > 0 {
-					queryStr += "OR " + q
-				} else {
-					queryStr += q
-				}
-				repeatInterface = append(repeatInterface, find)
+	idsQ := strings.ToLower(c.Query("ids"))
+	if len(idsQ) > 0 {
+		arr := strings.Split(idsQ, ",")
+		arr = utils.RemoveEmptyFromSlice(arr)
+		if len(arr) > 0 {
+			ids = arr
+		}
+	}
+	if len(ids) > 0 {
+		err = db.ExecuteOnDB(func(db *gorm.DB) error {
+			dbCtx := db.Model(&instance)
+			dbCtx = dbCtx.Where("id in ?", ids)
+			err := dbCtx.Find(&results).Error
+			return err
+		})
+
+	} else {
+		searchQ := strings.ToLower(c.Query("search"))
+		if len(searchQ) > 0 {
+			search = searchQ
+		}
+
+		db.ExecuteOnDB(func(db *gorm.DB) error {
+			offset := (page - 1) * limit
+			dbCtx := db.Model(&instance)
+			if fromTime > 0 {
+				dbCtx = dbCtx.Where("updated_at = ?", fromTime)
 			}
 
-			dbCtx.Where(queryStr, repeatInterface...)
-		}
-		count := int64(0)
-		err = dbCtx.Count(&count).Error
-		if err != nil {
+			if len(search) > 0 && len(searchableFields) > 0 {
+				var queryStr = ""
+				find := "%" + search + "%"
+				repeatInterface := make([]interface{}, 0, len(searchableFields))
+				for _, field := range searchableFields {
+					q := fmt.Sprintf("lower(%s) LIKE ? ", field)
+					if len(queryStr) > 0 {
+						queryStr += "OR " + q
+					} else {
+						queryStr += q
+					}
+					repeatInterface = append(repeatInterface, find)
+				}
+
+				dbCtx = dbCtx.Where(queryStr, repeatInterface...)
+			}
+			count := int64(0)
+			err = dbCtx.Count(&count).Error
+			if err != nil {
+				return err
+			}
+			total = int(count)
+			if offset > 0 {
+				dbCtx.Offset(offset)
+			}
+			dbCtx.Limit(limit).Order(orderKey + " " + orderType)
+			dbCtx.Find(&results)
+			err = dbCtx.Error
 			return err
-		}
-		total = int(count)
-		if offset > 0 {
-			dbCtx.Offset(offset)
-		}
-		dbCtx.Limit(limit).Order(orderKey + " " + orderType)
-		dbCtx.Find(&results)
-		err = dbCtx.Error
-		return err
-	})
+		})
+	}
 	if err == nil {
 		totalPages := 1
 		if total > 0 {
