@@ -55,7 +55,7 @@ func HandleUserRegister(c *gin.Context) {
 	userForm.Password = strings.TrimSpace(userForm.Password)
 
 	_, err = mail.ParseAddress(userForm.Email)
-	if len(userForm.Name) > 0 && len(userForm.Password) > 7 && err != nil {
+	if len(userForm.Name) > 0 && len(userForm.Password) > 7 && err == nil {
 		var hashBytes, err = bcrypt.GenerateFromPassword([]byte(userForm.Password), bcrypt.DefaultCost)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, GetErrorResponseWithMessage(err.Error()))
@@ -158,9 +158,9 @@ func AuthenticatorHandler(c *gin.Context) (interface{}, error) {
 				return err
 			})
 			if err != nil {
-				err = errors.New("user identity not found")
+				err = errors.New("machine identity not found")
 			} else {
-				payload.Identifier = clientId
+				payload.Identifier = client.ID.String()
 				payload.Name = client.Username
 				payload.Type = 2
 
